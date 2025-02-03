@@ -53,7 +53,7 @@ def parseRequest(requests: str) -> HTTPRequest | None:
                 return None
             
             return req
-            # == return HTTPRequest(HTTPMethod(strMethod), strPath)
+            
     return None
 
 # 응답 헤더 생성
@@ -71,12 +71,47 @@ def makeRespHeader(status: HTTPStatusCode, contentType: HTTPContentType, extra: 
     resp += '\n'
     return resp
 
-def handle_request(req: HTTPRequest) -> str:
-    ### TODO ###
-    pass
+def handle_request(req: HTTPRequest) -> bytes:
+    arPath = ['/', '/users', '/lotte.png', '/giantsclub']
+
+    if req is None:
+        resp = makeRespHeader(HTTPStatusCode.METHOD_NOT_ALLOWED, HTTPContentType.HTML)
+        
+        # return해야 아래를 실행하지 않음
+        return resp.encode('utf-8')
+
+    # else
+    strPath = req.url
+    print(f'Path={strPath}')
+
+    if strPath not in arPath:
+        resp = makeRespHeader(HTTPStatusCode.NOT_FOUND, HTTPContentType.HTML)
+        resp += '<html><body>404 Not Found</body></html>\n'
+
+    elif strPath == '/users':
+        resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.JSON)
+        users = get_user_from_db()
+        resp += json.dumps(users)
+
+    elif strPath == '/lotte.png':
+        resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.PNG)
+        bResp = resp.encode('utf-8')
+
+        with open('Day1\\lotte.png', 'rb') as f: # 바이너리 읽기
+            bResp += f.read() # 메모리에 저장하므로 바이트 명시 X
+        return bResp
+    
+    elif strPath == '/giantsclub':
+        resp = makeRespHeader(HTTPStatusCode.MOVED_PERMANENTLY, HTTPContentType.HTML, {'Location': 'https://www.giantsclub.com'})
+
+    else:
+        resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.HTML)
+        resp += '<html><body>Hello World<img src = "/lotte.png"/></body></html>\n'
+    
+    return resp.encode('utf-8')
+
 
 def createServer():
-    arPath = ['/', '/users', '/lotte.png', '/giantsclub']
     serverSocket = socket(AF_INET, SOCK_STREAM) # IPv4, TCP
     try:
         # 전화번호 준비
@@ -93,52 +128,11 @@ def createServer():
             # 고객 요청 듣기 (recv는 임의 처리)
             req = cSocket.recv(1024).decode('utf-8')
             print('req :', req)
+
+            # 요청 처리
             httpReq = parseRequest(req)
-            if httpReq is None:
-                # resp = 'HTTP/1.1 405 Method Not Allowed\n'
-                # resp += '\n'
-                resp = makeRespHeader(HTTPStatusCode.METHOD_NOT_ALLOWED, HTTPContentType.HTML)
-                
-                cSocket.sendall(resp.encode('utf-8'))
-                cSocket.shutdown(SHUT_WR)
-                continue
-
-            strPath = httpReq.url
-            print(f'Path={strPath}')
-
-            # 라우팅 + 고객에게 응답하기
-            resp = ''
-
-            if strPath not in arPath:
-                resp = makeRespHeader(HTTPStatusCode.NOT_FOUND, HTTPContentType.HTML)
-
-                resp += '<html><body>404 Not Found</body></html>\n'
-
-            elif strPath == '/users':
-                resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.JSON)
-
-                users = get_user_from_db()
-                resp += json.dumps(users)
-
-            elif strPath == '/lotte.png':
-                resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.PNG)
-                
-                cSocket.sendall(resp.encode('utf-8'))
-                with open('Day1\\lotte.png', 'rb') as f:
-                    while chunk := f.read(1024):
-                        cSocket.sendall(chunk)
-                cSocket.shutdown(SHUT_WR)
-                continue # if문 밖의 sendall, shutdown 실행하지 x
-            
-            elif strPath == '/giantsclub':
-                resp = makeRespHeader(HTTPStatusCode.MOVED_PERMANENTLY, HTTPContentType.HTML, {'Location': 'https://www.giantsclub.com'})
-
-            else:
-                resp = makeRespHeader(HTTPStatusCode.OK, HTTPContentType.HTML)
-                
-                resp += '<html><body>Hello World<img src = "/lotte.png"/></body></html>\n'
-            
-            cSocket.sendall(resp.encode('utf-8'))
+            bResp = handle_request(httpReq)
+            cSocket.sendall(bResp)
 
             # 전화 끊기
             cSocket.shutdown(SHUT_WR)
